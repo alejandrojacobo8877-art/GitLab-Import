@@ -689,6 +689,6 @@ if __name__ == "__main__":
     bot.run(
         os.environ.get(
             "DISCORD_TOKEN",
-            "MTU0Mzg1NTI2MTEzODE1NzY1OQ.G8VENk.iUx8kWB-Z9TKgsx6wOF7XF_y3NfpJ0aBlwzF9I",
+            "MTU0Mzg1NTI2MTEzODE1NzY1OQ.GK9r1k.B-D_PLpPkSb4Eaex4dEkjQcOeDxgjLyPbY4f44",
         )
     )
