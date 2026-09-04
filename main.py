@@ -546,7 +546,7 @@ class SignupModal(discord.ui.Modal, title="Trials of the Flame Registration"):
         # Determine Bracket
         if cb >= 115 or total >= 1750:
             bracket_name = "High Bracket"
-        elif cb >= 90 or total >= 1250:
+        elif cb >= 102 or total >= 1540:
             bracket_name = "Mid Bracket"
         else:
             bracket_name = "Low Bracket"
