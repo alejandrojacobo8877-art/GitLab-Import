@@ -35,7 +35,7 @@ def keep_alive():
 # --- 1. SUPABASE POSTGRESQL DATABASE CONNECTION ---
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://postgres.lrhcfqmykacliddytews:YOUR_PASSWORD_HERE@aws-0-eu-central-1.pooler.supabase.com:6543/postgres",
+    "postgresql://postgres.lrhcfqmykacliddytews:Foreveryoungmentally666@aws-0-eu-central-1.pooler.supabase.com:6543/postgres",
 )
 
 
