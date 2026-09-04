@@ -838,7 +838,7 @@ async def adminaddplayer(
 ):
     if combat_level >= 115 or total_level >= 1750:
         bracket_name = "High Bracket"
-    elif combat_level >= 102 or total_level >= 1540:
+    elif combat_level >= 105 or total_level >= 1540:
         bracket_name = "Mid Bracket"
     else:
         bracket_name = "Low Bracket"
