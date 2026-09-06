@@ -682,6 +682,145 @@ class SignupModal(discord.ui.Modal, title="Trials of the Flame Registration"):
 async def signup(interaction: discord.Interaction):
     await interaction.response.send_modal(SignupModal())
 
+# --- AUTHORIZATION HELPER ---
+# Replace these with your actual Admin/Staff Role Names
+AUTHORIZED_ROLE_NAMES = ["Owner", "NA", "Moderator", "TaskMaster Admin"]
+
+def is_authorized():
+    """Check if the user invoking the command has an authorized role or Admin permissions."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if interaction.user.guild_permissions.administrator:
+            return True
+        user_roles = [role.name for role in interaction.user.roles]
+        if any(role in user_roles for role in AUTHORIZED_ROLE_NAMES):
+            return True
+        
+        await interaction.response.send_message(
+            "❌ You do not have permission to use this command.", 
+            ephemeral=True
+        )
+        return False
+    return app_commands.check(predicate)
+
+
+# ==============================================================================
+# PLAYER & POINT MANAGEMENT COMMANDS
+# ==============================================================================
+
+@bot.tree.command(name="addpoints", description="Adds points to a player's total balance.")
+@app_commands.describe(member="The player to receive points", amount="Number of points to add")
+@is_authorized()
+async def addpoints(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if amount <= 0:
+        await interaction.response.send_message("❌ Amount must be greater than 0.", ephemeral=True)
+        return
+
+    user_id = str(member.id)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO players (user_id, points) 
+                VALUES (%s, %s)
+                ON CONFLICT (user_id) 
+                DO UPDATE SET points = players.points + EXCLUDED.points
+                RETURNING points;
+            """, (user_id, amount))
+            new_total = cur.fetchone()[0]
+
+    await interaction.response.send_message(
+        f"✅ Added **{amount}** points to {member.mention}. New Balance: **{new_total}** points."
+    )
+
+
+@bot.tree.command(name="removepoints", description="Deducts points from a player's balance (min 0).")
+@app_commands.describe(member="The player to deduct points from", amount="Number of points to remove")
+@is_authorized()
+async def removepoints(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if amount <= 0:
+        await interaction.response.send_message("❌ Amount must be greater than 0.", ephemeral=True)
+        return
+
+    user_id = str(member.id)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT points FROM players WHERE user_id = %s;", (user_id,))
+            result = cur.fetchone()
+            
+            if not result:
+                await interaction.response.send_message(f"❌ {member.mention} is not registered in the database.", ephemeral=True)
+                return
+            
+            current_points = result[0]
+            new_total = max(0, current_points - amount)
+            
+            cur.execute("UPDATE players SET points = %s WHERE user_id = %s;", (new_total, user_id))
+
+    await interaction.response.send_message(
+        f"✅ Removed **{amount}** points from {member.mention}. New Balance: **{new_total}** points."
+    )
+
+
+@bot.tree.command(name="setpoints", description="Manually sets a player's exact point total.")
+@app_commands.describe(member="The player to adjust", amount="The exact point total to set")
+@is_authorized()
+async def setpoints(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if amount < 0:
+        await interaction.response.send_message("❌ Points cannot be negative.", ephemeral=True)
+        return
+
+    user_id = str(member.id)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO players (user_id, points) 
+                VALUES (%s, %s)
+                ON CONFLICT (user_id) 
+                DO UPDATE SET points = EXCLUDED.points;
+            """, (user_id, amount))
+
+    await interaction.response.send_message(
+        f"⚙️ Set {member.mention}'s point balance directly to **{amount}** points."
+    )
+
+
+# ==============================================================================
+# RESET & OVERRIDE COMMANDS
+# ==============================================================================
+
+@bot.tree.command(name="resetuser", description="Completely resets a single player's database entry.")
+@app_commands.describe(member="The player whose profile you want to wipe")
+@is_authorized()
+async def resetuser(interaction: discord.Interaction, member: discord.Member):
+    user_id = str(member.id)
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM players WHERE user_id = %s;", (user_id,))
+            
+    await interaction.response.send_message(
+        f"⚠️ **WIPED:** {member.mention}'s profile, points, and active task state have been reset to zero."
+    )
+
+
+@bot.tree.command(name="resetall", description="DANGER: Completely resets ALL players' points, tasks, and state.")
+@app_commands.describe(confirm="Type 'CONFIRM' to execute the global database reset")
+@is_authorized()
+async def resetall(interaction: discord.Interaction, confirm: str):
+    if confirm != "CONFIRM":
+        await interaction.response.send_message(
+            "❌ **Reset cancelled.** You must type `CONFIRM` (in all caps) in the confirmation field to wipe all data.", 
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer()
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE TABLE players;")
+
+    await interaction.followup.send(
+        "🚨 **GLOBAL RESET COMPLETE:** All user profiles, active tasks, cooldowns, and point balances have been completely wiped."
+    )
 
 # --- 5. START SERVER & BOT ---
 if __name__ == "__main__":
