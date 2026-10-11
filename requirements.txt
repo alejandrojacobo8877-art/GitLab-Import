@@ -2,3 +2,4 @@ discord.py
 flask
 gunicorn
 psycopg2-binary
+supabase
