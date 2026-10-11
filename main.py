@@ -27,8 +27,6 @@ FILE LAYOUT (search for the "PART" numbers to jump around):
 # PART 1: IMPORTS
 # ==============================================================================
 
-
-import asyncio
 import datetime
 import os
 import random
@@ -39,10 +37,10 @@ from threading import Thread
 from typing import Optional
 from collections import defaultdict, Counter
 
-import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
+from dotenv import load_dotenv
 from flask import Flask
 import psycopg2
 import psycopg2.extras
@@ -56,17 +54,21 @@ from supabase import create_client, Client
 
 
 # --- Credentials / connection strings ---
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://postgres.lrhcfqmykacliddytews:Foreveryoungmentally666@aws-0-eu-central-1.pooler.supabase.com:6543/postgres",
-)
+load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://lrhcfqmykacliddytews.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_secret_ak8yFEvJ1_Ye7y0SYjDiOQ_4MFc4I4y")
-DISCORD_TOKEN = os.environ.get(
-    "DISCORD_TOKEN",
-    "MTU0Mzg1NTI2MTEzODE1NzY1OQ.GK9r1k.B-D_PLpPkSb4Eaex4dEkjQcOeDxgjLyPbY4f44",
-)
+REQUIRED_ENV_VARS = ("DATABASE_URL", "SUPABASE_URL", "SUPABASE_KEY", "DISCORD_TOKEN")
+missing_env_vars = [name for name in REQUIRED_ENV_VARS if not os.environ.get(name, "").strip()]
+if missing_env_vars:
+    raise SystemExit(
+        "Missing required credentials: " + ", ".join(missing_env_vars) + "\n"
+        "Add them to a .env file in the same folder as main.py (one NAME=value per line), "
+        "or set them as environment variables, then run the app again."
+    )
+
+DATABASE_URL = os.environ["DATABASE_URL"]
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 
 
 # --- Hosting mode ---
