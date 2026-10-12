@@ -1529,6 +1529,10 @@ def get_store_catalog() -> dict:
                         catalog[item_key]["cost"] = int(cost)
     except Exception as e:
         print(f"get_store_catalog warning: {e}", flush=True)
+
+    # The free skip is ALWAYS free, even if an old price override is stuck in the
+    # store_item_costs table (e.g. from an earlier /storeadmin change).
+    catalog["free_skip"]["cost"] = 0
     return catalog
 
 
@@ -3185,12 +3189,13 @@ async def buy(interaction: discord.Interaction, item: app_commands.Choice[str]):
         await interaction.followup.send("❌ Unknown item.", ephemeral=True)
         return
 
-    cost = int(catalog["cost"])
+    cost = 0 if item_key == "free_skip" else int(catalog["cost"])
     user_id = interaction.user.id
     user = get_user_data(user_id) or {}
     points = user.get("points", 0) or 0
 
-    if points < cost:
+    # Free items (cost 0) work even at 0 points; only charge when cost > 0.
+    if cost > 0 and points < cost:
         await interaction.followup.send(
             f"❌ Not enough points. Need **{cost}**, you have **{points}**.",
             ephemeral=True,
@@ -3234,26 +3239,32 @@ async def buy(interaction: discord.Interaction, item: app_commands.Choice[str]):
         )
         return
 
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE users SET points = points - %s
-                WHERE user_id = %s AND points >= %s
-                RETURNING points
-                """,
-                (cost, user_id, cost),
-            )
-            row = cur.fetchone()
-            if not row:
-                await interaction.followup.send(
-                    "❌ Could not deduct points (try again).", ephemeral=True
+    if cost > 0:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE users SET points = points - %s
+                    WHERE user_id = %s AND points >= %s
+                    RETURNING points
+                    """,
+                    (cost, user_id, cost),
                 )
-                return
-            new_balance = row[0]
-            conn.commit()
+                row = cur.fetchone()
+                if not row:
+                    await interaction.followup.send(
+                        "❌ Could not deduct points (try again).", ephemeral=True
+                    )
+                    return
+                new_balance = row[0]
+                conn.commit()
+    else:
+        new_balance = points  # free item: no points touched
 
-    _log_store_purchase(user_id, item_key, cost, event_id)
+    # The free skip is logged only after it actually succeeds (see below), so a
+    # failed skip doesn't burn the player's weekly use.
+    if item_key != "free_skip":
+        _log_store_purchase(user_id, item_key, cost, event_id)
 
     if item_key == "bond":
         channel = interaction.client.get_channel(STORE_STAFF_CHANNEL_ID)
@@ -3340,6 +3351,9 @@ async def buy(interaction: discord.Interaction, item: app_commands.Choice[str]):
 
             # CRITICAL FIX: consume the pending offer so the next /givetask is fresh.
             clear_pending_task_offer(str(user_id))
+
+            # Skip succeeded - now count it toward the weekly limit.
+            _log_store_purchase(user_id, item_key, 0, event_id)
 
         except Exception as e:
             print(f"Error applying free task skip: {e!r}", flush=True)
